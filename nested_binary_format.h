@@ -437,17 +437,24 @@ static inline nbf_typeless_value_t* nbf_value_to_typeless_value(nbf_value_t* val
     typedef struct nbf_field_t          field_t;
     typedef struct nbf_list_t           list_t;
     typedef struct nbf_raw_t            raw_t;
-    #define value_decode  nbf_value_decode
-    #define value_encode  nbf_value_encode
-    #define value_sizeof  nbf_value_sizeof
-    #define value_free    nbf_value_free
-    #define value_print   nbf_value_print
-    #define value_clone   nbf_value_clone
-    #define node_get      nbf_node_get
-    #define node_put      nbf_node_put
-    #define field_release nbf_field_release
-    #define node_remove   nbf_node_remove
-    #define node_clear    nbf_node_clear
+    #define value_decode     nbf_value_decode
+    #define value_decode_ex  nbf_value_decode_ex
+    #define value_encode     nbf_value_encode
+    #define value_sizeof     nbf_value_sizeof
+    #define value_free       nbf_value_free
+    #define value_free_ex    nbf_value_free_ex
+    #define value_print      nbf_value_print
+    #define value_clone      nbf_value_clone
+    #define value_clone_ex   nbf_value_clone_ex
+    #define node_get         nbf_node_get
+    #define node_put         nbf_node_put
+    #define node_put_ex      nbf_node_put_ex
+    #define field_release    nbf_field_release
+    #define field_release_ex nbf_field_release_ex
+    #define node_remove      nbf_node_remove
+    #define node_remove_ex   nbf_node_remove_ex
+    #define node_clear       nbf_node_clear
+    #define node_clear_ex    nbf_node_clear_ex
     #define NODE_FOREACH(node, field_var_name)         NBF_NODE_FOREACH(node, field_var_name)
     #define LIST_FOREACH(list, typelessvalue_var_name) NBF_LIST_FOREACH(list, typelessvalue_var_name)
     #define VEMPTY()                        NBF_VEMPTY()
