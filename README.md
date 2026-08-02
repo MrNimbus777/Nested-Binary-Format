@@ -48,24 +48,24 @@ You may also want to strip the names, then the inclusion should look like this:
 #include "nested_binary_format.h"
 
 int main(){
-    value_t value = STACK_NODE(
-        FIELD("printf", STRING("HELLO WORLD"))
+    value_t value = VSTACK_NODE(
+        VFIELD("printf", VSTRING("HELLO WORLD"))
     );
-    printf("To encode: "); nbf_print(&value); printf("\n");
+    printf("To encode: "); value_print(&value); printf("\n");
     
-    size_t buffer_size = nbf_sizeof(&value);
+    size_t buffer_size = value_sizeof(&value);
     byte buffer[buffer_size];
 
-    nbf_encode(&value, buffer);
+    value_encode(&value, buffer);
 
     printf("Encoded bytes: "); printf_bytes(buffer, buffer_size); printf("\n");
 
     byte* ptr = buffer;
-    value_t decoded = nbf_full_decode(&ptr);
+    value_t decoded = value_decode(&ptr);
 
-    printf("Decoded: "); nbf_print(&decoded); printf("\n");
+    printf("Decoded: "); value_print(&decoded); printf("\n");
 
-    nbf_free(&decoded);
+    value_free(&decoded);
     return 0;
 }
 ```
