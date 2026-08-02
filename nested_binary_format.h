@@ -143,7 +143,12 @@ struct nbf_field_t {
 // Custom memory management
 
 typedef void*(*nbf_alloc_f)(size_t);
-typedef void(*nbf_value_free_f)(void*);
+typedef void(*nbf_dealloc_f)(void*);
+
+typedef struct nbf_allocator_t {
+    nbf_alloc_f   alloc;
+    nbf_dealloc_f dealloc;
+} nbf_allocator_t;
 
 // You can use it in case your allocator does not need a free feature.
 NBF_API void nbf_dummy_free(void*) {}
@@ -151,7 +156,8 @@ NBF_API void nbf_dummy_free(void*) {}
 /*
 Takes in the byte sequence and decodes it into a full NBF structure.
 */
-NBF_API nbf_value_t nbf_value_decode(byte** cursor, nbf_alloc_f allocator);
+NBF_API nbf_value_t nbf_value_decode(byte** cursor);
+NBF_API nbf_value_t nbf_value_decode_ex(byte** cursor, nbf_allocator_t* allocator);
 
 /*
 Encodes the NBF value (recursively) into a sequence of bytes. The buffer must be pre-allocated (on stack or heap)
@@ -166,7 +172,8 @@ NBF_API size_t nbf_value_sizeof(nbf_value_t* value);
 /*
 Frees correctly any value. Safe to call on stack objects.
 */
-NBF_API void nbf_value_free(nbf_value_t* value, nbf_value_free_f free);
+NBF_API void nbf_value_free(nbf_value_t* value);
+NBF_API void nbf_value_free_ex(nbf_value_t* value, nbf_allocator_t* allocator);
 
 /*
 Prints the provided value to the standart output.
@@ -176,7 +183,8 @@ NBF_API void nbf_value_print(nbf_value_t* value);
 /*
 Fully clones the value into new allocated memory
 */
-NBF_API nbf_value_t nbf_value_clone(nbf_value_t* source, nbf_alloc_f allocator);
+NBF_API nbf_value_t nbf_value_clone(nbf_value_t* source);
+NBF_API nbf_value_t nbf_value_clone_ex(nbf_value_t* source, nbf_allocator_t* allocator);
 
 
 /* 
@@ -191,28 +199,32 @@ Creates a new field in the node object. Works similar to adding elements to a dy
 If node contains a field with same name, it replaces it's value, else it adds a new element to fields array.
 Note: If node was initially allocated on the stack, and you add a new field, the whole array of fields will be reallocated on the heap.
 On success: returns 0
-On failure: returns 1 (malloc/realloc failure)
+On failure: returns 1 (allocation failure)
 */
-NBF_API int nbf_node_put(nbf_value_t* node, const char* name, nbf_value_t value, nbf_value_free_f free);
+NBF_API int nbf_node_put(nbf_value_t* node, const char* name, nbf_value_t value);
+NBF_API int nbf_node_put_ex(nbf_value_t* node, const char* name, nbf_value_t value, nbf_allocator_t* allocator);
 
 /*
 This function marks a field as deleted. It sets field's name to NULL and calls nbf_free on the field's value.
 On success: returns 0
 On failure: returns 1 (NOT FOUND)
 */
-NBF_API int nbf_field_release(nbf_field_t* field, nbf_value_free_f free_);
+NBF_API int nbf_field_release(nbf_field_t* field);
+NBF_API int nbf_field_release_ex(nbf_field_t* field, nbf_allocator_t* allocator);
 
 /* 
 Firstly calls nbf_node_get and nbf_field_release.
 On success: returns 0
 On failure: returns 1 (NOT FOUND)
 */
-NBF_API int nbf_node_remove(nbf_value_t* node, const char* name, nbf_value_free_f free_);
+NBF_API int nbf_node_remove(nbf_value_t* node, const char* name);
+NBF_API int nbf_node_remove_ex(nbf_value_t* node, const char* name, nbf_allocator_t* allocator);
 
 /*
 Works similary to nbf_node_remove, but for all fields.
 */
-NBF_API void nbf_node_clear(nbf_value_t* node, nbf_value_free_f free_);
+NBF_API void nbf_node_clear(nbf_value_t* node);
+NBF_API void nbf_node_clear_ex(nbf_value_t* node, nbf_allocator_t* allocator);
 
 
 /*
@@ -245,7 +257,8 @@ typedef enum NBF_FILESYSTEM_ERRORS {
 } NBF_FILESYSTEM_ERRORS;
 
 NBF_API int nbf_write_to_file(nbf_value_t* value, const char* path);
-NBF_API int nbf_read_from_file(nbf_value_t* unitialized_value, const char* path, nbf_alloc_f);
+NBF_API int nbf_read_from_file(nbf_value_t* unitialized_value, const char* path);
+NBF_API int nbf_read_from_file_ex(nbf_value_t* unitialized_value, const char* path, nbf_allocator_t* allocator);
 
 
 // CONSTRUCTORS
@@ -479,9 +492,13 @@ static const nbf_decode_type_f NBF_DECODE_FUNCTION_TABLE[NBF_TYPES_COUNT] = {
     NBF_TYPE_FAMILY
     #undef X
 };
-NBF_API nbf_value_t nbf_value_decode(byte** cursor, nbf_alloc_f allocator){
-    if(allocator == NULL) allocator = NBF_DEFAULT_ALLOC;
-    return NBF_DECODE_FUNCTION_TABLE[*((*cursor)++)](cursor, allocator);
+NBF_API nbf_value_t nbf_value_decode(byte** cursor){
+    return NBF_DECODE_FUNCTION_TABLE[*((*cursor)++)](cursor, NBF_DEFAULT_ALLOC);
+}
+NBF_API nbf_value_t nbf_value_decode_ex(byte** cursor, nbf_allocator_t* allocator){
+    if(!allocator) return NBF_DECODE_FUNCTION_TABLE[*((*cursor)++)](cursor, NBF_DEFAULT_ALLOC);
+    if(!allocator->alloc) return NBF_DECODE_FUNCTION_TABLE[*((*cursor)++)](cursor, NBF_DEFAULT_ALLOC); 
+    return NBF_DECODE_FUNCTION_TABLE[*((*cursor)++)](cursor, allocator->alloc);
 }
 
 
@@ -519,12 +536,12 @@ NBF_API size_t nbf_value_sizeof(nbf_value_t* value){
 
 // DECLARE FREE FUNCTIONS AND FUNCTION TABLE
 
-typedef void(*nbf_value_free_type_f)(nbf_typeless_value_t*, nbf_value_free_f);
-#define X(x1, x2) static void nbf_value_free_##x1(nbf_typeless_value_t*, nbf_value_free_f);
+typedef void(*nbf_value_free_type_f)(nbf_typeless_value_t*, nbf_dealloc_f);
+#define X(x1, x2) static void nbf_value_free_##x1(nbf_typeless_value_t*, nbf_dealloc_f);
 NBF_TYPE_FAMILY_STRUCT
 NBF_TYPE_FAMILY_CHAR
 #undef X
-static void nbf_value_free_ignored_(nbf_typeless_value_t*, nbf_value_free_f){}
+static void nbf_value_free_ignored_(nbf_typeless_value_t*, nbf_dealloc_f){}
 static const nbf_value_free_type_f NBF_FREE_FUNCTION_TABLE[NBF_TYPES_COUNT] = {
     #define X(x1, x2) nbf_value_free_ignored_,
     NBF_TYPE_FAMILY_EMPTY
@@ -537,11 +554,14 @@ static const nbf_value_free_type_f NBF_FREE_FUNCTION_TABLE[NBF_TYPES_COUNT] = {
     NBF_TYPE_FAMILY_NUMERIC
     #undef X
 };
-NBF_API void nbf_value_free(nbf_value_t* value, nbf_value_free_f free_){
-    if(free_ == NULL) free_ = NBF_DEFAULT_FREE;
-    return NBF_FREE_FUNCTION_TABLE[value->type](&value->typeless_value, free_);
+NBF_API void nbf_value_free(nbf_value_t* value){
+    return NBF_FREE_FUNCTION_TABLE[value->type](&value->typeless_value, NBF_DEFAULT_FREE);
 }
-
+NBF_API void nbf_value_free_ex(nbf_value_t* value, nbf_allocator_t* allocator){
+    if(!allocator) return NBF_FREE_FUNCTION_TABLE[value->type](&value->typeless_value, NBF_DEFAULT_FREE);
+    if(!allocator->dealloc) return NBF_FREE_FUNCTION_TABLE[value->type](&value->typeless_value, NBF_DEFAULT_FREE);
+    return NBF_FREE_FUNCTION_TABLE[value->type](&value->typeless_value, allocator->dealloc);
+}
 
 // DECLARE PRINT FUNCTIONS AND FUNCTION TABLE
 
@@ -570,9 +590,13 @@ static const nbf_value_clone_type_f NBF_CLONE_FUNCTION_TABLE[NBF_TYPES_COUNT] = 
     NBF_TYPE_FAMILY
     #undef X
 };
-NBF_API nbf_value_t nbf_value_clone(nbf_value_t* source, nbf_alloc_f allocator){
-    if(allocator == NULL) allocator = NBF_DEFAULT_ALLOC;
-    return NBF_CLONE_FUNCTION_TABLE[source->type](&source->typeless_value, allocator);
+NBF_API nbf_value_t nbf_value_clone(nbf_value_t* source){
+    return NBF_CLONE_FUNCTION_TABLE[source->type](&source->typeless_value, NBF_DEFAULT_ALLOC);
+}
+NBF_API nbf_value_t nbf_value_clone_ex(nbf_value_t* source, nbf_allocator_t* allocator){
+    if(!allocator) return NBF_CLONE_FUNCTION_TABLE[source->type](&source->typeless_value, NBF_DEFAULT_ALLOC);
+    if(!allocator->alloc) return NBF_CLONE_FUNCTION_TABLE[source->type](&source->typeless_value, NBF_DEFAULT_ALLOC);
+    return NBF_CLONE_FUNCTION_TABLE[source->type](&source->typeless_value, allocator->alloc);
 }
 
 
@@ -650,7 +674,7 @@ NBF_API int nbf_write_to_file(nbf_value_t* value, const char* path){
     return 0;
 }
 
-NBF_API int nbf_read_from_file(nbf_value_t* out, const char* path, nbf_alloc_f allocator){
+NBF_API int nbf_read_from_file(nbf_value_t* out, const char* path){
     FILE* f = fopen(path, "rb");
     if (!f) {
         return NBF_FS_FILE_NOT_FOUND;
@@ -681,7 +705,43 @@ NBF_API int nbf_read_from_file(nbf_value_t* out, const char* path, nbf_alloc_f a
 
     byte* cursor = buffer;
 
-    *out = nbf_value_decode(&cursor, allocator);
+    *out = nbf_value_decode(&cursor);
+    free(buffer);
+    return 0;
+}
+
+NBF_API int nbf_read_from_file_ex(nbf_value_t* out, const char* path, nbf_allocator_t* allocator){
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        return NBF_FS_FILE_NOT_FOUND;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    rewind(f);
+
+    if (size <= 0) {
+        fclose(f);
+        return NBF_FS_IO_ERROR;
+    }
+
+    byte* buffer = (byte*)malloc((size_t)size);
+    if (!buffer) {
+        fclose(f);
+        return NBF_FS_OUT_OF_MEMORY;
+    }
+
+    if (fread(buffer, 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        free(buffer);
+        return NBF_FS_IO_ERROR;
+    }
+
+    fclose(f);
+
+    byte* cursor = buffer;
+
+    *out = nbf_value_decode_ex(&cursor, allocator);
     free(buffer);
     return 0;
 }
@@ -689,15 +749,49 @@ NBF_API int nbf_read_from_file(nbf_value_t* out, const char* path, nbf_alloc_f a
 // API LAYER FOR NODE
 
 NBF_API nbf_field_t* nbf_node_get(nbf_value_t* node, const char* name){
-    NBF_NODE_FOREACH(node->tv.NODE, field) if(strcmp(field->name, name) == 0) return field;
+    if(name == NULL) return NULL;
+    NBF_NODE_FOREACH(node->tv.NODE, field) if(field->name) if(strcmp(field->name, name) == 0) return field;
     return NULL;
 }
 
-NBF_API int nbf_node_put(nbf_value_t* node, const char* name, nbf_value_t value, nbf_value_free_f free_){
+NBF_API int nbf_node_put(nbf_value_t* node, const char* name, nbf_value_t value){
     nbf_node_t* n = &node->tv.NODE;
 
-    NBF_NODE_FOREACH(*n, f) if(*f->name == 0 || strcmp(f->name, name) == 0) {
-        if(node->tv.__ownership == NBF_OWNERSHIP_HEAP) nbf_value_free(&f->value, free_);
+    NBF_NODE_FOREACH(*n, f) if(f->name == NULL || strcmp(f->name, name) == 0) {
+        if(node->tv.__ownership == NBF_OWNERSHIP_HEAP) nbf_value_free(&f->value);
+        if(f->__name_ownership == NBF_OWNERSHIP_HEAP)  NBF_DEFAULT_FREE((void*)f->name);
+        f->name  = name;
+        f->value = value; 
+        return 0;
+    }
+    if(n->size+1 > n->capacity){
+        n->capacity = n->capacity ? n->capacity*2 : 2;
+        if(node->tv.__ownership == NBF_OWNERSHIP_HEAP) {
+            nbf_field_t* tmp = (nbf_field_t*) NBF_DEFAULT_ALLOC(sizeof(nbf_field_t)*n->capacity);
+            if(!tmp) return 1;
+            memcpy(tmp, n->fields, sizeof(nbf_field_t)*n->size);
+            NBF_DEFAULT_FREE(n->fields);
+            n->fields = tmp;
+        } else {
+            nbf_field_t* tmp = (nbf_field_t*) memcpy(NBF_DEFAULT_ALLOC(sizeof(nbf_field_t)*n->capacity), n->fields, sizeof(nbf_field_t)*n->size);
+            if(!tmp) return 1;
+            n->fields = tmp;
+            node->tv.__ownership = NBF_OWNERSHIP_HEAP;
+        }
+    }
+    n->fields[n->size].name  = name;
+    n->fields[n->size].value = value;
+    ++n->size;
+    return 0;
+}
+NBF_API int nbf_node_put_ex(nbf_value_t* node, const char* name, nbf_value_t value, nbf_allocator_t* allocator){
+    nbf_node_t* n = &node->tv.NODE;
+
+    nbf_alloc_f alloc_ = allocator ? (allocator->alloc ? allocator->alloc : NBF_DEFAULT_ALLOC) : NBF_DEFAULT_ALLOC;
+    nbf_dealloc_f free_ = allocator ? (allocator->dealloc ? allocator->dealloc : NBF_DEFAULT_FREE) : NBF_DEFAULT_FREE;
+
+    NBF_NODE_FOREACH(*n, f) if(f->name == NULL || strcmp(f->name, name) == 0) {
+        if(node->tv.__ownership == NBF_OWNERSHIP_HEAP) nbf_value_free_ex(&f->value, allocator);
         if(f->__name_ownership == NBF_OWNERSHIP_HEAP)  free_((void*)f->name);
         f->name  = name;
         f->value = value; 
@@ -706,11 +800,13 @@ NBF_API int nbf_node_put(nbf_value_t* node, const char* name, nbf_value_t value,
     if(n->size+1 > n->capacity){
         n->capacity = n->capacity ? n->capacity*2 : 2;
         if(node->tv.__ownership == NBF_OWNERSHIP_HEAP) {
-            nbf_field_t* tmp = (nbf_field_t*) realloc(n->fields, sizeof(nbf_field_t)*n->capacity);
+            nbf_field_t* tmp = (nbf_field_t*) alloc_(sizeof(nbf_field_t)*n->capacity);
             if(!tmp) return 1;
+            memcpy(tmp, n->fields, sizeof(nbf_field_t)*n->size);
+            free_(n->fields);
             n->fields = tmp;
         } else {
-            nbf_field_t* tmp = (nbf_field_t*) memcpy((byte*)NBF_DEFAULT_ALLOC(sizeof(nbf_field_t)*n->capacity), (byte*) n->fields, sizeof(nbf_field_t)*n->size);
+            nbf_field_t* tmp = (nbf_field_t*) memcpy(alloc_(sizeof(nbf_field_t)*n->capacity), n->fields, sizeof(nbf_field_t)*n->size);
             if(!tmp) return 1;
             n->fields = tmp;
             node->tv.__ownership = NBF_OWNERSHIP_HEAP;
@@ -722,25 +818,50 @@ NBF_API int nbf_node_put(nbf_value_t* node, const char* name, nbf_value_t value,
     return 0;
 }
 
-
-NBF_API int nbf_field_release(nbf_field_t* field, nbf_value_free_f free_){
+NBF_API int nbf_field_release(nbf_field_t* field){
+    if(field) {
+        if(field->__name_ownership == NBF_OWNERSHIP_HEAP) {
+            NBF_DEFAULT_FREE((void*)field->name);
+            field->__name_ownership = NBF_OWNERSHIP_UNDEFINED;
+        }
+        field->name = NULL;
+        nbf_value_free(&field->value);
+        return 0;
+    }
+    return 1;
+}
+NBF_API int nbf_field_release_ex(nbf_field_t* field, nbf_allocator_t* allocator){
+    nbf_dealloc_f free_ = allocator ? (allocator->dealloc ? allocator->dealloc : NBF_DEFAULT_FREE) : NBF_DEFAULT_FREE;
     if(field) {
         if(field->__name_ownership == NBF_OWNERSHIP_HEAP) {
             free_((void*)field->name);
             field->__name_ownership = NBF_OWNERSHIP_UNDEFINED;
         }
         field->name = NULL;
-        nbf_value_free(&field->value, free_);
+        nbf_value_free_ex(&field->value, allocator);
         return 0;
     }
     return 1;
 }
 
-NBF_API int nbf_node_remove(nbf_value_t* node, const char* name, nbf_value_free_f free_){
-    return nbf_field_release(nbf_node_get(node, name), free_);
+NBF_API int nbf_node_remove(nbf_value_t* node, const char* name){
+    return nbf_field_release(nbf_node_get(node, name));
+}
+NBF_API int nbf_node_remove_ex(nbf_value_t* node, const char* name, nbf_allocator_t* allocator){
+    return nbf_field_release_ex(nbf_node_get(node, name), allocator);
 }
 
-NBF_API void nbf_node_clear(nbf_value_t* node, nbf_value_free_f free_){
+NBF_API void nbf_node_clear(nbf_value_t* node){
+    NBF_NODE_FOREACH(node->tv.NODE, field) {
+        if(field->__name_ownership == NBF_OWNERSHIP_HEAP) {
+            NBF_DEFAULT_FREE((void*)field->name);
+            field->__name_ownership = NBF_OWNERSHIP_UNDEFINED;
+        }
+        field->name = NULL;
+    }
+}
+NBF_API void nbf_node_clear_ex(nbf_value_t* node, nbf_allocator_t* allocator){
+    nbf_dealloc_f free_ = allocator ? (allocator->dealloc ? allocator->dealloc : NBF_DEFAULT_FREE) : NBF_DEFAULT_FREE;
     NBF_NODE_FOREACH(node->tv.NODE, field) {
         if(field->__name_ownership == NBF_OWNERSHIP_HEAP) {
             free_((void*)field->name);
@@ -774,7 +895,7 @@ static nbf_value_t nbf_decode_NODE(byte** cursor, nbf_alloc_f allocator){
 
         fields[i] = (nbf_field_t) {
             .name = name,
-            .value = nbf_value_decode(cursor, allocator),
+            .value = NBF_DECODE_FUNCTION_TABLE[*((*cursor)++)](cursor, allocator),
             .__name_ownership = NBF_OWNERSHIP_HEAP
         };
     }
@@ -905,18 +1026,18 @@ static nbf_value_t nbf_decode_FLOAT64(byte** cursor, nbf_alloc_f allocator){
 
 
 
-static void nbf_value_free_NODE(nbf_typeless_value_t* value, nbf_value_free_f free_){
+static void nbf_value_free_NODE(nbf_typeless_value_t* value, nbf_dealloc_f free_){
     nbf_node_t node = value->NODE;
     for(uint16_t i = 0; i < node.size; ++i) {
         if(node.fields[i].__name_ownership == NBF_OWNERSHIP_HEAP) free_((void*)node.fields[i].name);
-        nbf_value_free(&node.fields[i].value, free_);
+        NBF_FREE_FUNCTION_TABLE[node.fields[i].value.type](&node.fields[i].value, free_);
     }
     if(value->__ownership == NBF_OWNERSHIP_UNDEFINED) return;
     value->__ownership = NBF_OWNERSHIP_UNDEFINED;
     free_(node.fields);
 }
 
-static void nbf_value_free_LIST(nbf_typeless_value_t* value, nbf_value_free_f free_){
+static void nbf_value_free_LIST(nbf_typeless_value_t* value, nbf_dealloc_f free_){
     nbf_list_t list = value->LIST;
     for(uint16_t i = 0; i < list.size; ++i) {
         NBF_FREE_FUNCTION_TABLE[list.type](list.values+i, free_);
@@ -926,13 +1047,13 @@ static void nbf_value_free_LIST(nbf_typeless_value_t* value, nbf_value_free_f fr
     free_(list.values);
 }
 
-static void nbf_value_free_RAW(nbf_typeless_value_t* value, nbf_value_free_f free_){
+static void nbf_value_free_RAW(nbf_typeless_value_t* value, nbf_dealloc_f free_){
     if(value->__ownership == NBF_OWNERSHIP_UNDEFINED) return;
     value->__ownership = NBF_OWNERSHIP_UNDEFINED;
     free_(value->RAW.data);
 }
 
-static void nbf_value_free_STRING(nbf_typeless_value_t* value, nbf_value_free_f free_){
+static void nbf_value_free_STRING(nbf_typeless_value_t* value, nbf_dealloc_f free_){
     if(value->__ownership == NBF_OWNERSHIP_UNDEFINED) return;
     value->__ownership = NBF_OWNERSHIP_UNDEFINED;
     free_((void*)value->STRING);
@@ -1083,7 +1204,7 @@ static size_t nbf_value_sizeof_NODE(nbf_typeless_value_t* value){
         
         const char* str = field.name;
 
-        if(*str == 0) continue;
+        if(str == NULL) continue;
 
         uint16_t n = 0;
         for(const char* c = str; *c != '\0'; ++c) ++n;
@@ -1184,11 +1305,15 @@ static void nbf_value_print_NODE(nbf_typeless_value_t* value){
     nbf_node_t node = value->NODE;
     printf("{");
     if(node.size > 0){
-        nbf_field_t field = node.fields[0];
-        if(*field.name != 0){
-            printf("\"%s\":", field.name); nbf_value_print(&field.value);
+        size_t deleted = 0;
+        while(node.fields[deleted].name == NULL) ++deleted;
+        if(deleted == node.size) {
+            printf("}");
+            return;
         }
-        for(size_t i = 1; i < node.size; ++i) {
+        printf("\"%s\":", node.fields[deleted].name); nbf_value_print(&node.fields[deleted].value);
+        
+        for(size_t i = 1+deleted; i < node.size; ++i) {
             nbf_field_t field = node.fields[i];
             if(*field.name == 0) continue;
             printf(", \"%s\":", field.name); nbf_value_print(&field.value);
@@ -1265,7 +1390,7 @@ static nbf_value_t nbf_value_clone_NODE(nbf_typeless_value_t* source, nbf_alloc_
         size_t name_len = strlen(source->NODE.fields[i].name); 
         node.fields[i].name = (char*) memcpy(allocator(sizeof(char)*(name_len+1)), source->NODE.fields[i].name, name_len+1);
         node.fields[i].__name_ownership = NBF_OWNERSHIP_HEAP;
-        node.fields[i].value = nbf_value_clone(&source->NODE.fields[i].value, allocator);
+        node.fields[i].value = NBF_CLONE_FUNCTION_TABLE[source->NODE.fields[i].value.type](&source->NODE.fields[i].value, allocator);
     }
 
     return (nbf_value_t){
