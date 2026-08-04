@@ -82,7 +82,7 @@ Decoded: {"printf": "HELLO WORLD"}
 
 ## Instalation
 
-Just dowload the `nested_binary_format.jar/nested_binary_format.jar` in your working directory following the rightsteps for installing a local lib for yuor Java project manager (Gradle, Maven...)`
+Just dowload the `nested_binary_format.jar/nested_binary_format.jar` in your working directory following the right steps for installing a local lib for your Java project manager (Gradle, Maven...)
 
 ---
 
