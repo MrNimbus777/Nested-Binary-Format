@@ -82,13 +82,14 @@ Decoded: {"printf": "HELLO WORLD"}
 
 ## Instalation
 
-Just dowload the `nested_binary_format.jar/nested_binary_format.jar` in your working directory following the right steps for installing a local lib for your Java project manager (Gradle, Maven...)
+Simply download the `nested_binary_format.jar/nested_binary_format.jar` in your working directory following the right steps for installing a local lib for your Java project manager (Gradle, Maven...)
 
 ---
 
 ## Basic Example
 
 ```java
+...
 import net.nimbus.nbf.NestedBinaryFormat;
 import net.nimbus.nbf.value.Value;
 
