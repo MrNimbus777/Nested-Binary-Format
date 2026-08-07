@@ -238,14 +238,25 @@ Returns the actual node fields size, ignoring deleted ones.
 NBF_API size_t nbf_node_size(nbf_node_t* node);
 
 /*
-Expands into a for loop where the iterator is field_var_name that being a nbf_field_t*.
+Expands into a for loop where the iterator is field_var_name that being a nbf_field_t*. It skips deleted values.
 */
-#define NBF_NODE_FOREACH(node, field_var_name)       \
-    for(                                             \
-        nbf_field_t* field_var_name = nbf_node_next(&node, NULL); \
-        field_var_name != NULL;                             \
-        field_var_name = nbf_node_next(&node, field_var_name)\
+#define NBF_NODE_FOREACH(node, field_var_name)                      \
+    for(                                                            \
+        nbf_field_t* field_var_name = nbf_node_next(&(node), NULL); \
+        field_var_name != NULL;                                     \
+        field_var_name = nbf_node_next(&(node), field_var_name)     \
     )
+
+/*
+Expands into a for loop where the iterator is field_var_name that being a nbf_field_t*. It does not skip deleted values.
+*/
+#define NBF_NODE_FOR(node, field_var_name)              \
+    for(                                                \
+        nbf_field_t* field_var_name = (node).fields;    \
+        field_var_name < ((node).fields + (node).size); \
+        field_var_name++                                \
+    )
+
 /*
 Expands into a for loop where the iterator is typelessvalue_var_name that being a nbf_typeless_value_t*.
 */
@@ -769,14 +780,14 @@ NBF_API int nbf_read_from_file_ex(nbf_value_t* out, const char* path, nbf_alloca
 
 NBF_API nbf_field_t* nbf_node_get(nbf_value_t* node, const char* name){
     if(name == NULL) return NULL;
-    NBF_NODE_FOREACH(node->tv.NODE, field) if(field->name) if(strcmp(field->name, name) == 0) return field;
+    NBF_NODE_FOREACH(node->tv.NODE, field) if(strcmp(field->name, name) == 0) return field;
     return NULL;
 }
 
 NBF_API int nbf_node_put(nbf_value_t* node, const char* name, nbf_value_t value){
     nbf_node_t* n = &node->tv.NODE;
 
-    NBF_NODE_FOREACH(*n, f) if(f->name == NULL || strcmp(f->name, name) == 0) {
+    NBF_NODE_FOR(*n, f) if(f->name == NULL || strcmp(f->name, name) == 0) {
         if(node->tv.__ownership == NBF_OWNERSHIP_HEAP) nbf_value_free(&f->value);
         if(f->__name_ownership == NBF_OWNERSHIP_HEAP)  NBF_DEFAULT_FREE((void*)f->name);
         f->name  = name;
@@ -811,7 +822,7 @@ NBF_API int nbf_node_put_ex(nbf_value_t* node, const char* name, nbf_value_t val
     nbf_alloc_f alloc_ = allocator ? (allocator->alloc ? allocator->alloc : NBF_DEFAULT_ALLOC) : NBF_DEFAULT_ALLOC;
     nbf_dealloc_f free_ = allocator ? (allocator->dealloc ? allocator->dealloc : NBF_DEFAULT_FREE) : NBF_DEFAULT_FREE;
 
-    NBF_NODE_FOREACH(*n, f) if(f->name == NULL || strcmp(f->name, name) == 0) {
+    NBF_NODE_FOR(*n, f) if(f->name == NULL || strcmp(f->name, name) == 0) {
         if(node->tv.__ownership == NBF_OWNERSHIP_HEAP) nbf_value_free_ex(&f->value, allocator);
         if(f->__name_ownership == NBF_OWNERSHIP_HEAP)  free_((void*)f->name);
         f->name  = name;
