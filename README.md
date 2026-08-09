@@ -4,16 +4,17 @@ NBF is a lightweight library for serializing hierarchical typed data into a comp
 
 NBF provides:
 
-- nested object structures
-- typed homogeneous arrays
-- raw binary blobs
-- strings
-- signed and unsigned integers
-- floating-point values
-- recursive encoding and decoding
-- explicit memory ownership
+* nested object structures
+* typed homogeneous arrays
+* raw binary blobs
+* strings
+* signed and unsigned integers
+* floating-point values
+* recursive encoding and decoding
+* explicit memory ownership
 
 ---
+
 # C (nested_binary_format.h)
 
 ## Installation
@@ -32,6 +33,7 @@ In other files:
 ```
 
 You may also want to strip the names, then the inclusion should look like this:
+
 ```c
 #define NBF_IMPLEMENTATION
 #define NBF_STRIP_PREFIXES
@@ -64,7 +66,7 @@ int main(){
     value_t decoded = value_decode(&ptr);
 
     printf("Decoded: "); value_print(&decoded); printf("\n");
-
+    
     value_free(&decoded);
     return 0;
 }
@@ -77,12 +79,14 @@ To encode: {"printf": "HELLO WORLD"}
 Encoded bytes: 01 00 01 00 06 70 72 69 6E 74 66 04 00 00 00 0B 48 45 4C 4C 4F 20 57 4F 52 4C 44
 Decoded: {"printf": "HELLO WORLD"}
 ```
+
 ---
+
 # Java (nested_binary_format.jar)
 
-## Instalation
+## Installation
 
-Simply download the `nested_binary_format.jar/nested_binary_format.jar` in your working directory following the right steps for installing a local lib for your Java project manager (Gradle, Maven...)
+Simply download the `nested_binary_format.jar` in your working directory following the right steps for installing a local lib for your Java project manager (Gradle, Maven...)
 
 ---
 
@@ -125,12 +129,20 @@ Decoded:  Object { printf: "HELLO WORLD" }
 ```
 
 ---
+
 # JavaScript (nested_binary_format.js)
 
-## Instalation
+## Installation
 
-Obviously is as simple as for the C version. 
-Just dowload the `nested_binary_format.js` in your working directory and write at the begin of your script `import { NBF } from "/nested_binary_format.js";`. Don't forget to mark your script with `type="module"`
+Obviously is as simple as for the C version.
+
+Just download the `nested_binary_format.js` in your working directory and write at the beginning of your script:
+
+```js
+import { NBF } from "/nested_binary_format.js";
+```
+
+Don't forget to mark your script with `type="module"`.
 
 ---
 
@@ -164,9 +176,77 @@ Decoded:  Object { printf: "HELLO WORLD" }
 
 ---
 
+# Go (cgo wrapper)
+
+NBF also provides a Go wrapper built on top of the C implementation using cgo.
+
+The Go package provides an idiomatic Go interface for working with NBF values while using the native C implementation underneath.
+
+It provides:
+
+* encoding and decoding
+* nodes and fields
+* typed lists
+* raw binary data
+* strings
+* signed and unsigned integers
+* floating-point values
+* cloning
+* node field iteration
+* automatic C memory cleanup
+
+## Installation
+
+If the Go package is available as a Go module, install it using:
+
+```bash
+go get github.com/MrNimbus777/NestedBinaryFormat/tree/main/nbf.go
+```
+
+Then import it into your project:
+
+```go
+import "github.com/MrNimbus777/NestedBinaryFormat/tree/main/nbf.go"
+```
+
+The Go wrapper uses cgo, so a C compiler and the corresponding NBF native library are required for the target platform.
+
+---
+
+## Basic Example
+
+```go
+package main
+
+import (
+    "fmt"
+
+    "github.com/MrNimbus777/NestedBinaryFormat/tree/main/nbf.go"
+)
+
+func main() {
+    var value nbf.Value
+
+    value.SetString("HELLO WORLD")
+
+    fmt.Println("To encode:", value)
+
+    encoded, _ := value.Encode()
+
+    fmt.Println("Encoded bytes:", encoded)
+
+    decoded := nbf.Decode(encoded)
+
+    fmt.Println("Decoded:", decoded)
+}
+```
+
+---
+
 ### Future plans:
-- To add files related functionality (read, write)
-- To implement partial decoding
-- To integrate a compression algorithm for the binary data
-- To translate this lib into other programming languages (e.g. C++, Java, Go, Rust, Python)
-- To conquer the world.
+
+* To add files related functionality (read, write)
+* To implement partial decoding
+* To integrate a compression algorithm for the binary data
+* To translate this lib into other programming languages (e.g. Rust, Python)
+* To conquer the world.
